@@ -17,6 +17,7 @@ import * as BufferGeometryUtils from '../utils/BufferGeometryUtils.js';
  */
 
 const _cb = new Vector3(), _ab = new Vector3();
+// SimplifyModifier代码解释
 
 class SimplifyModifier {
 
