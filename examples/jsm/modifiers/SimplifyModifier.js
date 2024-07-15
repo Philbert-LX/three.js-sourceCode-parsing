@@ -146,7 +146,7 @@ class SimplifyModifier {
 
 		while ( z -- ) {
 
-			nextVertex = minimumCostEdge( vertices );
+			nextVertex = minimumCostEdge( vertices );// 选出当前数组中最小的边缘消耗的点用来塌陷
 
 			if ( ! nextVertex ) {
 
@@ -155,6 +155,7 @@ class SimplifyModifier {
 
 			}
 
+			// 对该点进行塌陷
 			collapse( vertices, faces, nextVertex, nextVertex.collapseNeighbor );
 
 		}
@@ -266,6 +267,7 @@ function computeEdgeCollapseCost( u, v ) {
 
 	// find the "sides" triangles that are on the edge uv
 	// 找到边uv上的“边”三角形
+	// 找到同时包含当前点与要判断的u点与其邻接的v 的面
 	for ( let i = 0, il = u.faces.length; i < il; i ++ ) {
 
 		const face = u.faces[ i ];
@@ -292,11 +294,12 @@ function computeEdgeCollapseCost( u, v ) {
 			const sideFace = sideFaces[ j ];
 			// use dot product of face normals.
 			// 使用面法线的点积。
-			const dotProd = face.normal.dot( sideFace.normal );
-			minCurvature = Math.min( minCurvature, ( 1.001 - dotProd ) / 2 );
+			const dotProd = face.normal.dot( sideFace.normal ); // 两个面的法线单位向量的点积，用于判断两个夹角的大小
+			minCurvature = Math.min( minCurvature, ( 1.001 - dotProd ) / 2 ); // 选出该线段相邻面 与 该点当前关联的面 的夹角最小的值
 
 		}
 
+		// 选出该线段相邻面 与 该点当所有关联的面 的夹角最大的值（每个面与其线段相邻面最小值中的最大值）
 		curvature = Math.max( curvature, minCurvature );
 
 	}
@@ -307,6 +310,8 @@ function computeEdgeCollapseCost( u, v ) {
     //虽然这似乎并不完全正确
 	const borders = 0;
 
+	// 考虑该线段有多少相邻三角面的因素，当只有一个三角面相邻的时候 扩大最终结果
+	// 可以理解为该线段在末端 不应该被塌陷，塌陷就会造成形变很大。
 	if ( sideFaces.length < 2 ) {
 
 		// we add some arbitrary cost for borders,
@@ -317,6 +322,7 @@ function computeEdgeCollapseCost( u, v ) {
 
 	}
 
+	// 最终因素值导出
 	const amt = edgelength * curvature + borders;
 
 	return amt;
@@ -561,6 +567,7 @@ function minimumCostEdge( vertices ) {
 class Triangle {
 
 	// 构造函数，接收六个参数：三个顶点和三条边的长度（但边的长度在这里并未直接使用）。  
+	// v1 v2 v3 为该三角面三个点详细信息， abc为该三个点的索引
 	constructor( v1, v2, v3, a, b, c ) {
 
 		// 存储三条边的长度（但实际上在后续代码中并未使用这些长度）
