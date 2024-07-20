@@ -119,6 +119,7 @@ const exceptionList = [
 	'webgpu_sandbox',
 	'webgpu_sprites',
 	'webgpu_video_panorama',
+	'webgpu_postprocessing_bloom_emissive',
 
 	// Awaiting for WebGPU Backend support in Puppeteer
 	'webgpu_storage_buffer',
@@ -148,8 +149,6 @@ const exceptionList = [
 	'webgpu_texturegrad',
 	'webgpu_performance_renderbundle',
 	'webgpu_lights_rectarealight',
-	'webgpu_postprocessing',
-	'misc_controls_fly',
 
 	// WebGPU idleTime and parseTime too low
 	'webgpu_compute_particles',
