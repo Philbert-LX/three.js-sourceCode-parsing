@@ -62,16 +62,16 @@ class WebGLRenderer {
 	constructor( parameters = {} ) {
 
 		const {
-			canvas = createCanvasElement(),
-			context = null,
-			depth = true,
-			stencil = false,
-			alpha = false,
-			antialias = false,
-			premultipliedAlpha = true,
-			preserveDrawingBuffer = false,
-			powerPreference = 'default',
-			failIfMajorPerformanceCaveat = false,
+			canvas = createCanvasElement(), // 一个供渲染器绘制其输出的canvas 它和下面的domElement属性对应。 如果没有传这个参数，会创建一个新canvas
+			context = null, // 可用于将渲染器附加到已有的渲染环境(RenderingContext)中。默认值是null
+			depth = true, // 着色器精度. 可以是 "highp", "mediump" 或者 "lowp". 如果设备支持，默认为"highp" .
+			stencil = false, // 绘图缓存是否有一个至少8位的模板缓存(stencil buffer)。默认为false
+			alpha = false, // controls the default clear alpha value. When set to true, the value is 0. Otherwise it's 1. Default is false.
+			antialias = false, // 是否执行抗锯齿。默认为false.
+			premultipliedAlpha = true, // renderer是否假设颜色有 premultiplied alpha. 默认为true
+			preserveDrawingBuffer = false, // 是否保留缓直到手动清除或被覆盖。 默认false.
+			powerPreference = 'default', // 提示用户代理怎样的配置更适用于当前WebGL环境。 可能是"high-performance", "low-power" 或 "default"。默认是"default". 详见WebGL spec
+			failIfMajorPerformanceCaveat = false, // 检测渲染器是否会因性能过差而创建失败。默认为false。详见 WebGL spec for details.
 		} = parameters;
 
 		this.isWebGLRenderer = true;
