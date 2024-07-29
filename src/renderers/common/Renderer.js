@@ -24,7 +24,7 @@ import { Vector2 } from '../../math/Vector2.js';
 import { Vector3 } from '../../math/Vector3.js';
 import { Vector4 } from '../../math/Vector4.js';
 import { RenderTarget } from '../../core/RenderTarget.js';
-import { DoubleSide, BackSide, FrontSide, SRGBColorSpace, NoColorSpace, NoToneMapping, LinearFilter, LinearSRGBColorSpace, HalfFloatType, RGBAFormat } from '../../constants.js';
+import { DoubleSide, BackSide, FrontSide, SRGBColorSpace, NoColorSpace, NoToneMapping, LinearFilter, LinearSRGBColorSpace, HalfFloatType, RGBAFormat, PCFShadowMap } from '../../constants.js';
 
 const _scene = /*@__PURE__*/ new Scene();
 const _drawingBufferSize = /*@__PURE__*/ new Vector2();
@@ -138,7 +138,7 @@ class Renderer {
 
 		this.shadowMap = {
 			enabled: false,
-			type: null
+			type: PCFShadowMap
 		};
 
 		this.xr = {
@@ -147,7 +147,23 @@ class Renderer {
 
 		this.debug = {
 			checkShaderErrors: true,
-			onShaderError: null
+			onShaderError: null,
+			getRawShaderAsync: async ( scene, camera, object ) => {
+
+				await this.compileAsync( scene, camera );
+
+				const renderList = this._renderLists.get( scene, camera );
+				const renderContext = this._renderContexts.get( scene, camera, this._renderTarget );
+
+				const material = scene.overrideMaterial || object.material;
+
+				const renderObject = this._objects.get( object, material, scene, camera, renderList.lightsNode, renderContext );
+
+				const { fragmentShader, vertexShader } = renderObject.getNodeBuilderState();
+
+				return { fragmentShader, vertexShader };
+
+			}
 		};
 
 	}
