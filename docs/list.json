@@ -331,6 +331,7 @@
 
 			"Controls": {
 				"ArcballControls": "examples/en/controls/ArcballControls",
+				"Controls": "examples/en/controls/Controls",
 				"DragControls": "examples/en/controls/DragControls",
 				"FirstPersonControls": "examples/en/controls/FirstPersonControls",
 				"FlyControls": "examples/en/controls/FlyControls",
@@ -1083,6 +1084,7 @@
 
 			"控制": {
 				"ArcballControls": "examples/zh/controls/ArcballControls",
+				"Controls": "examples/zh/controls/Controls",
 				"DragControls": "examples/zh/controls/DragControls",
 				"FirstPersonControls": "examples/zh/controls/FirstPersonControls",
 				"FlyControls": "examples/zh/controls/FlyControls",

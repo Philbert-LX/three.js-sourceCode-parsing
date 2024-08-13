@@ -163,19 +163,51 @@ class OperatorNode extends TempNode {
 
 			if ( op === '<' && outputLength > 1 ) {
 
-				return builder.format( `${ builder.getMethod( 'lessThan' ) }( ${ a }, ${ b } )`, type, output );
+				if ( builder.useComparisonMethod ) {
+
+					return builder.format( `${ builder.getMethod( 'lessThan', output ) }( ${ a }, ${ b } )`, type, output );
+
+				} else {
+
+					return builder.format( `( ${ a } < ${ b } )`, type, output );
+
+				}
 
 			} else if ( op === '<=' && outputLength > 1 ) {
 
-				return builder.format( `${ builder.getMethod( 'lessThanEqual' ) }( ${ a }, ${ b } )`, type, output );
+				if ( builder.useComparisonMethod ) {
+
+					return builder.format( `${ builder.getMethod( 'lessThanEqual', output ) }( ${ a }, ${ b } )`, type, output );
+
+				} else {
+
+					return builder.format( `( ${ a } <= ${ b } )`, type, output );
+
+				}
 
 			} else if ( op === '>' && outputLength > 1 ) {
 
-				return builder.format( `${ builder.getMethod( 'greaterThan' ) }( ${ a }, ${ b } )`, type, output );
+				if ( builder.useComparisonMethod ) {
+
+					return builder.format( `${ builder.getMethod( 'greaterThan', output ) }( ${ a }, ${ b } )`, type, output );
+
+				} else {
+
+					return builder.format( `( ${ a } > ${ b } )`, type, output );
+
+				}
 
 			} else if ( op === '>=' && outputLength > 1 ) {
 
-				return builder.format( `${ builder.getMethod( 'greaterThanEqual' ) }( ${ a }, ${ b } )`, type, output );
+				if ( builder.useComparisonMethod ) {
+
+					return builder.format( `${ builder.getMethod( 'greaterThanEqual', output ) }( ${ a }, ${ b } )`, type, output );
+
+				} else {
+
+					return builder.format( `( ${ a } >= ${ b } )`, type, output );
+
+				}
 
 			} else if ( op === '!' || op === '~' ) {
 
@@ -231,7 +263,7 @@ export const add = nodeProxy( OperatorNode, '+' );
 export const sub = nodeProxy( OperatorNode, '-' );
 export const mul = nodeProxy( OperatorNode, '*' );
 export const div = nodeProxy( OperatorNode, '/' );
-export const remainder = nodeProxy( OperatorNode, '%' );
+export const modInt = nodeProxy( OperatorNode, '%' );
 export const equal = nodeProxy( OperatorNode, '==' );
 export const notEqual = nodeProxy( OperatorNode, '!=' );
 export const lessThan = nodeProxy( OperatorNode, '<' );
@@ -253,7 +285,7 @@ addNodeElement( 'add', add );
 addNodeElement( 'sub', sub );
 addNodeElement( 'mul', mul );
 addNodeElement( 'div', div );
-addNodeElement( 'remainder', remainder );
+addNodeElement( 'modInt', modInt );
 addNodeElement( 'equal', equal );
 addNodeElement( 'notEqual', notEqual );
 addNodeElement( 'lessThan', lessThan );
@@ -270,5 +302,15 @@ addNodeElement( 'bitOr', bitOr );
 addNodeElement( 'bitXor', bitXor );
 addNodeElement( 'shiftLeft', shiftLeft );
 addNodeElement( 'shiftRight', shiftRight );
+
+
+export const remainder = ( ...params ) => { // @deprecated, r168
+
+	console.warn( 'TSL.OperatorNode: .remainder() has been renamed to .modInt().' );
+	return modInt( ...params );
+
+};
+
+addNodeElement( 'remainder', remainder );
 
 addNodeClass( 'OperatorNode', OperatorNode );

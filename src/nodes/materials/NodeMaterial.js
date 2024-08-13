@@ -13,8 +13,6 @@ import { materialReference } from '../accessors/MaterialReferenceNode.js';
 import { positionLocal, positionView } from '../accessors/PositionNode.js';
 import { skinningReference } from '../accessors/SkinningNode.js';
 import { morphReference } from '../accessors/MorphNode.js';
-import { texture } from '../accessors/TextureNode.js';
-import { cubeTexture } from '../accessors/CubeTextureNode.js';
 import { lightsNode } from '../lighting/LightsNode.js';
 import { mix } from '../math/MathNode.js';
 import { float, vec3, vec4 } from '../shadernode/ShaderNode.js';
@@ -208,11 +206,21 @@ class NodeMaterial extends Material {
 
 		let depthNode = this.depthNode;
 
-		if ( depthNode === null && renderer.logarithmicDepthBuffer === true ) {
+		if ( depthNode === null ) {
 
-			const fragDepth = modelViewProjection().w.add( 1 );
+			const mrt = renderer.getMRT();
 
-			depthNode = fragDepth.log2().mul( cameraLogDepth ).mul( 0.5 );
+			if ( mrt && mrt.has( 'depth' ) ) {
+
+				depthNode = mrt.get( 'depth' );
+
+			} else if ( renderer.logarithmicDepthBuffer === true ) {
+
+				const fragDepth = modelViewProjection().w.add( 1 );
+
+				depthNode = fragDepth.log2().mul( cameraLogDepth ).mul( 0.5 );
+
+			}
 
 		}
 
@@ -364,7 +372,7 @@ class NodeMaterial extends Material {
 
 	}
 
-	setupEnvironment( builder ) {
+	setupEnvironment( /*builder*/ ) {
 
 		let node = null;
 
@@ -374,11 +382,7 @@ class NodeMaterial extends Material {
 
 		} else if ( this.envMap ) {
 
-			node = this.envMap.isCubeTexture ? cubeTexture( this.envMap ) : texture( this.envMap );
-
-		} else if ( builder.environmentNode ) {
-
-			node = builder.environmentNode;
+			node = this.envMap.isCubeTexture ? materialReference( 'envMap', 'cubeTexture' ) : materialReference( 'envMap', 'texture' );
 
 		}
 

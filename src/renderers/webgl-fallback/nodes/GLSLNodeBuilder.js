@@ -54,8 +54,11 @@ class GLSLNodeBuilder extends NodeBuilder {
 
 		this.uniformGroups = {};
 		this.transforms = [];
+		this.extensions = {};
 
 		this.instanceBindGroups = false;
+
+		this.useComparisonMethod = true;
 
 	}
 
@@ -636,9 +639,24 @@ ${ flowData.code }
 
 	}
 
+	enableExtension( name, behavior, shaderStage = this.shaderStage ) {
+
+		const map = this.extensions[ shaderStage ] || ( this.extensions[ shaderStage ] = new Map() );
+
+		if ( map.has( name ) === false ) {
+
+			map.set( name, {
+				name,
+				behavior
+			} );
+
+		}
+
+	}
+
 	getExtensions( shaderStage ) {
 
-		let extensions = '';
+		const snippets = [];
 
 		if ( shaderStage === 'vertex' ) {
 
@@ -647,13 +665,25 @@ ${ flowData.code }
 
 			if ( isBatchedMesh && ext.has( 'WEBGL_multi_draw' ) ) {
 
-				extensions += '#extension GL_ANGLE_multi_draw : require\n';
+				this.enableExtension( 'GL_ANGLE_multi_draw', 'require', shaderStage );
 
 			}
 
 		}
 
-		return extensions;
+		const extensions = this.extensions[ shaderStage ];
+
+		if ( extensions !== undefined ) {
+
+			for ( const { name, behavior } of extensions.values() ) {
+
+				snippets.push( `#extension ${name} : ${behavior}` );
+
+			}
+
+		}
+
+		return snippets.join( '\n' );
 
 	}
 
