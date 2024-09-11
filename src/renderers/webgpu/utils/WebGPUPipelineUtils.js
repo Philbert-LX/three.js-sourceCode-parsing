@@ -123,7 +123,7 @@ class WebGPUPipelineUtils {
 		const sampleCount = this._getSampleCount( renderObject.context );
 
 		const pipelineDescriptor = {
-			label: 'renderPipeline',
+			label: `renderPipeline_${ material.name || material.type }_${ material.id }`,
 			vertex: Object.assign( {}, vertexModule, { buffers: vertexBuffers } ),
 			fragment: Object.assign( {}, fragmentModule, { targets } ),
 			primitive: primitiveState,
@@ -168,17 +168,14 @@ class WebGPUPipelineUtils {
 
 	}
 
-	createBundleEncoder( renderContext, renderObject ) {
+	createBundleEncoder( renderContext ) {
 
 		const backend = this.backend;
 		const { utils, device } = backend;
 
-		const renderContextData = backend.get( renderContext );
-		const renderObjectData = backend.get( renderObject );
-
 		const depthStencilFormat = utils.getCurrentDepthStencilFormat( renderContext );
 		const colorFormat = utils.getCurrentColorFormat( renderContext );
-		const sampleCount = this._getSampleCount( renderObject.context );
+		const sampleCount = this._getSampleCount( renderContext );
 
 		const descriptor = {
 			label: 'renderBundleEncoder',
@@ -187,13 +184,7 @@ class WebGPUPipelineUtils {
 			sampleCount
 		};
 
-		const bundleEncoder = device.createRenderBundleEncoder( descriptor );
-
-		renderObjectData.bundleEncoder = bundleEncoder;
-		renderContextData.currentSets = { attributes: {} };
-		renderContextData._renderBundleViewport = renderContext.width + '_' + renderContext.height;
-
-		return bundleEncoder;
+		return device.createRenderBundleEncoder( descriptor );
 
 	}
 

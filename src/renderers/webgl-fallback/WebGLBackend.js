@@ -53,6 +53,11 @@ class WebGLBackend extends Backend {
 		this.trackTimestamp = ( parameters.trackTimestamp === true );
 
 		this.extensions.get( 'EXT_color_buffer_float' );
+		this.extensions.get( 'WEBGL_clip_cull_distance' );
+		this.extensions.get( 'OES_texture_float_linear' );
+		this.extensions.get( 'EXT_color_buffer_half_float' );
+		this.extensions.get( 'WEBGL_multisampled_render_to_texture' );
+		this.extensions.get( 'WEBGL_render_shared_exponent' );
 		this.extensions.get( 'WEBGL_multi_draw' );
 
 		this.disjoint = this.extensions.get( 'EXT_disjoint_timer_query_webgl2' );
@@ -202,7 +207,7 @@ class WebGLBackend extends Backend {
 
 			const { x, y, width, height } = renderContext.scissorValue;
 
-			gl.scissor( x, y, width, height );
+			gl.scissor( x, renderContext.height - height - y, width, height );
 
 		}
 
@@ -230,6 +235,20 @@ class WebGLBackend extends Backend {
 		const renderContextData = this.get( renderContext );
 		const previousContext = renderContextData.previousContext;
 
+		const occlusionQueryCount = renderContext.occlusionQueryCount;
+
+		if ( occlusionQueryCount > 0 ) {
+
+			if ( occlusionQueryCount > renderContextData.occlusionQueryIndex ) {
+
+				gl.endQuery( gl.ANY_SAMPLES_PASSED );
+
+			}
+
+			this.resolveOccludedAsync( renderContext );
+
+		}
+
 		const textures = renderContext.textures;
 
 		if ( textures !== null ) {
@@ -249,7 +268,6 @@ class WebGLBackend extends Backend {
 		}
 
 		this._currentContext = previousContext;
-
 
 		if ( renderContext.textures !== null && renderContext.renderTarget ) {
 
@@ -274,9 +292,21 @@ class WebGLBackend extends Backend {
 
 					// TODO Add support for MRT
 
-					gl.blitFramebuffer( 0, 0, renderContext.width, renderContext.height, 0, 0, renderContext.width, renderContext.height, mask, gl.NEAREST );
+					if ( renderContext.scissor ) {
 
-					gl.invalidateFramebuffer( gl.READ_FRAMEBUFFER, renderTargetContextData.invalidationArray );
+						const { x, y, width, height } = renderContext.scissorValue;
+
+						const viewY = renderContext.height - height - y;
+
+						gl.blitFramebuffer( x, viewY, x + width, viewY + height, x, viewY, x + width, viewY + height, mask, gl.NEAREST );
+						gl.invalidateSubFramebuffer( gl.READ_FRAMEBUFFER, renderTargetContextData.invalidationArray, x, viewY, width, height );
+
+					} else {
+
+						gl.blitFramebuffer( 0, 0, renderContext.width, renderContext.height, 0, 0, renderContext.width, renderContext.height, mask, gl.NEAREST );
+						gl.invalidateFramebuffer( gl.READ_FRAMEBUFFER, renderTargetContextData.invalidationArray );
+
+					}
 
 				}
 
@@ -295,29 +325,9 @@ class WebGLBackend extends Backend {
 
 			} else {
 
-				const gl = this.gl;
-
 				gl.viewport( 0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight );
 
 			}
-
-		}
-
-		const occlusionQueryCount = renderContext.occlusionQueryCount;
-
-		if ( occlusionQueryCount > 0 ) {
-
-			const renderContextData = this.get( renderContext );
-
-			if ( occlusionQueryCount > renderContextData.occlusionQueryIndex ) {
-
-				const { gl } = this;
-
-				gl.endQuery( gl.ANY_SAMPLES_PASSED );
-
-			}
-
-			this.resolveOccludedAsync( renderContext );
 
 		}
 
@@ -396,7 +406,7 @@ class WebGLBackend extends Backend {
 		const gl = this.gl;
 		const { x, y, width, height } = renderContext.viewportValue;
 
-		gl.viewport( x, y, width, height );
+		gl.viewport( x, renderContext.height - height - y, width, height );
 
 	}
 
@@ -490,16 +500,16 @@ class WebGLBackend extends Backend {
 
 	beginCompute( computeGroup ) {
 
-		const gl = this.gl;
+		const { state, gl } = this;
 
-		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+		state.bindFramebuffer( gl.FRAMEBUFFER, null );
 		this.initTimestampQuery( computeGroup );
 
 	}
 
 	compute( computeGroup, computeNode, bindings, pipeline ) {
 
-		const gl = this.gl;
+		const { state, gl } = this;
 
 		if ( ! this.discard ) {
 
@@ -525,7 +535,7 @@ class WebGLBackend extends Backend {
 
 		}
 
-		gl.useProgram( programGPU );
+		state.useProgram( programGPU );
 
 		this._bindUniforms( bindings );
 
@@ -587,6 +597,10 @@ class WebGLBackend extends Backend {
 
 		const contextData = this.get( context );
 
+		const drawParms = renderObject.getDrawParameters();
+
+		if ( drawParms === null ) return;
+
 		//
 
 		this._bindUniforms( renderObject.getBindings() );
@@ -595,7 +609,7 @@ class WebGLBackend extends Backend {
 
 		state.setMaterial( material, frontFaceCW );
 
-		gl.useProgram( programGPU );
+		state.useProgram( programGPU );
 
 		//
 
@@ -624,10 +638,6 @@ class WebGLBackend extends Backend {
 		//
 
 		const index = renderObject.getIndex();
-
-		const geometry = renderObject.geometry;
-		const drawRange = renderObject.drawRange;
-		const firstVertex = drawRange.start;
 
 		//
 
@@ -659,7 +669,6 @@ class WebGLBackend extends Backend {
 		}
 
 		//
-
 		const renderer = this.bufferRenderer;
 
 		if ( object.isPoints ) renderer.mode = gl.POINTS;
@@ -683,32 +692,25 @@ class WebGLBackend extends Backend {
 
 		//
 
-
-		let count;
+		const { vertexCount, instanceCount } = drawParms;
+		let { firstVertex } = drawParms;
 
 		renderer.object = object;
 
 		if ( index !== null ) {
 
+			firstVertex *= index.array.BYTES_PER_ELEMENT;
+
 			const indexData = this.get( index );
-			const indexCount = ( drawRange.count !== Infinity ) ? drawRange.count : index.count;
 
 			renderer.index = index.count;
 			renderer.type = indexData.type;
-
-			count = indexCount;
 
 		} else {
 
 			renderer.index = 0;
 
-			const vertexCount = ( drawRange.count !== Infinity ) ? drawRange.count : geometry.attributes.position.count;
-
-			count = vertexCount;
-
 		}
-
-		const instanceCount = this.getInstanceCount( renderObject );
 
 		if ( object.isBatchedMesh ) {
 
@@ -728,11 +730,11 @@ class WebGLBackend extends Backend {
 
 		} else if ( instanceCount > 1 ) {
 
-			renderer.renderInstances( firstVertex, count, instanceCount );
+			renderer.renderInstances( firstVertex, vertexCount, instanceCount );
 
 		} else {
 
-			renderer.render( firstVertex, count );
+			renderer.render( firstVertex, vertexCount );
 
 		}
 		//
@@ -747,9 +749,9 @@ class WebGLBackend extends Backend {
 
 	}
 
-	getRenderCacheKey( renderObject ) {
+	getRenderCacheKey( /*renderObject*/ ) {
 
-		return renderObject.id;
+		return '';
 
 	}
 
@@ -786,9 +788,9 @@ class WebGLBackend extends Backend {
 
 	}
 
-	copyTextureToBuffer( texture, x, y, width, height ) {
+	copyTextureToBuffer( texture, x, y, width, height, faceIndex ) {
 
-		return this.textureUtils.copyTextureToBuffer( texture, x, y, width, height );
+		return this.textureUtils.copyTextureToBuffer( texture, x, y, width, height, faceIndex );
 
 	}
 
@@ -974,7 +976,7 @@ class WebGLBackend extends Backend {
 
 	_completeCompile( renderObject, pipeline ) {
 
-		const gl = this.gl;
+		const { state, gl } = this;
 		const pipelineData = this.get( pipeline );
 		const { programGPU, fragmentShader, vertexShader } = pipelineData;
 
@@ -984,7 +986,7 @@ class WebGLBackend extends Backend {
 
 		}
 
-		gl.useProgram( programGPU );
+		state.useProgram( programGPU );
 
 		// Bindings
 
@@ -1002,7 +1004,7 @@ class WebGLBackend extends Backend {
 
 	createComputePipeline( computePipeline, bindings ) {
 
-		const gl = this.gl;
+		const { state, gl } = this;
 
 		// Program
 
@@ -1052,7 +1054,7 @@ class WebGLBackend extends Backend {
 
 		}
 
-		gl.useProgram( programGPU );
+		state.useProgram( programGPU );
 
 		// Bindings
 
@@ -1104,7 +1106,7 @@ class WebGLBackend extends Backend {
 
 	updateBindings( bindGroup, bindings ) {
 
-		const { gl } = this;
+		const { state, gl } = this;
 
 		let groupIndex = 0;
 		let textureIndex = 0;
@@ -1120,7 +1122,7 @@ class WebGLBackend extends Backend {
 
 					gl.bindBuffer( gl.UNIFORM_BUFFER, bufferGPU );
 					gl.bufferData( gl.UNIFORM_BUFFER, data, gl.DYNAMIC_DRAW );
-					gl.bindBufferBase( gl.UNIFORM_BUFFER, groupIndex, bufferGPU );
+					state.bindBufferBase( gl.UNIFORM_BUFFER, groupIndex, bufferGPU );
 
 					this.set( binding, {
 						index: groupIndex ++,
@@ -1519,7 +1521,7 @@ class WebGLBackend extends Backend {
 
 		}
 
-		const gl = this.gl;
+		const { gl } = this;
 
 		transformFeedbackGPU = gl.createTransformFeedback();
 
@@ -1584,7 +1586,8 @@ class WebGLBackend extends Backend {
 
 				if ( binding.isUniformsGroup || binding.isUniformBuffer ) {
 
-					gl.bindBufferBase( gl.UNIFORM_BUFFER, index, bindingData.bufferGPU );
+					// TODO USE bindBufferRange to group multiple uniform buffers
+					state.bindBufferBase( gl.UNIFORM_BUFFER, index, bindingData.bufferGPU );
 
 				} else if ( binding.isSampledTexture ) {
 

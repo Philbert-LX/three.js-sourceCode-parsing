@@ -1,11 +1,16 @@
-import { addNodeClass } from '../core/Node.js';
-import { nodeObject } from '../shadernode/ShaderNode.js';
+import { nodeObject } from '../tsl/TSLBase.js';
 import { NodeUpdateType } from '../core/constants.js';
 import { getValueType } from '../core/NodeUtils.js';
 import ArrayElementNode from '../utils/ArrayElementNode.js';
 import BufferNode from './BufferNode.js';
 
 class UniformArrayElementNode extends ArrayElementNode {
+
+	static get type() {
+
+		return 'UniformArrayElementNode';
+
+	}
 
 	constructor( arrayBuffer, indexNode ) {
 
@@ -33,6 +38,12 @@ class UniformArrayElementNode extends ArrayElementNode {
 }
 
 class UniformArrayNode extends BufferNode {
+
+	static get type() {
+
+		return 'UniformArrayNode';
+
+	}
 
 	constructor( value, elementType = null ) {
 
@@ -142,8 +153,6 @@ class UniformArrayNode extends BufferNode {
 export default UniformArrayNode;
 
 export const uniformArray = ( values, nodeType ) => nodeObject( new UniformArrayNode( values, nodeType ) );
-
-addNodeClass( 'UniformArrayNode', UniformArrayNode );
 
 //
 

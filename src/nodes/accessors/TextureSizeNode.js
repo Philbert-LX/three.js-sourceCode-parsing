@@ -1,8 +1,13 @@
 import Node from '../core/Node.js';
-import { addNodeClass } from '../core/Node.js';
-import { addNodeElement, nodeProxy } from '../shadernode/ShaderNode.js';
+import { nodeProxy } from '../tsl/TSLBase.js';
 
 class TextureSizeNode extends Node {
+
+	static get type() {
+
+		return 'TextureSizeNode';
+
+	}
 
 	constructor( textureNode, levelNode = null ) {
 
@@ -28,8 +33,4 @@ class TextureSizeNode extends Node {
 
 export default TextureSizeNode;
 
-export const textureSize = nodeProxy( TextureSizeNode );
-
-addNodeElement( 'textureSize', textureSize );
-
-addNodeClass( 'TextureSizeNode', TextureSizeNode );
+export const textureSize = /*@__PURE__*/ nodeProxy( TextureSizeNode );

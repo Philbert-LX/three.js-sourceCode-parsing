@@ -149,6 +149,16 @@ if ( /Windows/g.test( navigator.userAgent ) ) {
 
 //
 
+let diagnostics = '';
+
+if ( /Firefox/g.test( navigator.userAgent ) !== true ) {
+
+	diagnostics += 'diagnostic( off, derivative_uniformity );\n';
+
+}
+
+//
+
 class WGSLNodeBuilder extends NodeBuilder {
 
 	constructor( object, renderer ) {
@@ -161,9 +171,11 @@ class WGSLNodeBuilder extends NodeBuilder {
 
 		this.directives = {};
 
+		this.scopedArrays = new Map();
+
 	}
 
-	needsColorSpaceToLinear( texture ) {
+	needsToWorkingColorSpace( texture ) {
 
 		return texture.isVideoTexture === true && texture.colorSpace !== NoColorSpace;
 
@@ -267,7 +279,7 @@ class WGSLNodeBuilder extends NodeBuilder {
 
 	isUnfilterable( texture ) {
 
-		return this.getComponentTypeFromTexture( texture ) !== 'float' || ( texture.isDataTexture === true && texture.type === FloatType ) || texture.isMultisampleRenderTargetTexture === true;
+		return this.getComponentTypeFromTexture( texture ) !== 'float' || ( ! this.isAvailable( 'float32Filterable' ) && texture.isDataTexture === true && texture.type === FloatType ) || texture.isMultisampleRenderTargetTexture === true;
 
 	}
 
@@ -598,12 +610,18 @@ class WGSLNodeBuilder extends NodeBuilder {
 
 		//
 
-		const code = `fn ${ layout.name }( ${ parameters.join( ', ' ) } ) -> ${ this.getType( layout.type ) } {
+		let code = `fn ${ layout.name }( ${ parameters.join( ', ' ) } ) -> ${ this.getType( layout.type ) } {
 ${ flowData.vars }
 ${ flowData.code }
-	return ${ flowData.result };
+`;
 
-}`;
+		if ( flowData.result ) {
+
+			code += `\treturn ${ flowData.result };\n`;
+
+		}
+
+		code += '\n}\n';
 
 		//
 
@@ -620,6 +638,12 @@ ${ flowData.code }
 		}
 
 		return 'instanceIndex';
+
+	}
+
+	getInvocationLocalIndex() {
+
+		return this.getBuiltin( 'local_invocation_index', 'invocationLocalIndex', 'u32', 'attribute' );
 
 	}
 
@@ -653,7 +677,7 @@ ${ flowData.code }
 
 	getFragCoord() {
 
-		return this.getBuiltin( 'position', 'fragCoord', 'vec4<f32>' ) + '.xyz';
+		return this.getBuiltin( 'position', 'fragCoord', 'vec4<f32>' ) + '.xy';
 
 	}
 
@@ -741,6 +765,45 @@ ${ flowData.code }
 		}
 
 		return snippets.join( ',\n\t' );
+
+	}
+
+	getScopedArray( name, scope, bufferType, bufferCount ) {
+
+		if ( this.scopedArrays.has( name ) === false ) {
+
+			this.scopedArrays.set( name, {
+				name,
+				scope,
+				bufferType,
+				bufferCount
+			} );
+
+		}
+
+		return name;
+
+	}
+
+	getScopedArrays( shaderStage ) {
+
+		if ( shaderStage !== 'compute' ) {
+
+			return;
+
+		}
+
+		const snippets = [];
+
+		for ( const { name, scope, bufferType, bufferCount } of this.scopedArrays.values() ) {
+
+			const type = this.getType( bufferType );
+
+			snippets.push( `var<${scope}> ${name}: array< ${type}, ${bufferCount} >;` );
+
+		}
+
+		return snippets.join( '\n' );
 
 	}
 
@@ -949,7 +1012,7 @@ ${ flowData.code }
 
 					textureType = 'texture_cube<f32>';
 
-				} else if ( texture.isDataArrayTexture === true ) {
+				} else if ( texture.isDataArrayTexture === true || texture.isCompressedArrayTexture === true ) {
 
 					textureType = 'texture_2d_array<f32>';
 
@@ -1031,6 +1094,8 @@ ${ flowData.code }
 
 		const shadersData = this.material !== null ? { fragment: {}, vertex: {} } : { compute: {} };
 
+		this.sortBindingGroups();
+
 		for ( const shaderStage in shadersData ) {
 
 			const stageData = shadersData[ shaderStage ];
@@ -1041,6 +1106,7 @@ ${ flowData.code }
 			stageData.vars = this.getVars( shaderStage );
 			stageData.codes = this.getCodes( shaderStage );
 			stageData.directives = this.getDirectives( shaderStage );
+			stageData.scopedArrays = this.getScopedArrays( shaderStage );
 
 			//
 
@@ -1232,8 +1298,8 @@ fn main( ${shaderData.attributes} ) -> VaryingsStruct {
 	_getWGSLFragmentCode( shaderData ) {
 
 		return `${ this.getSignature() }
-
-diagnostic( off, derivative_uniformity );
+// global
+${ diagnostics }
 
 // uniforms
 ${shaderData.uniforms}
@@ -1266,6 +1332,9 @@ ${shaderData.directives}
 
 // system
 var<private> instanceIndex : u32;
+
+// locals
+${shaderData.scopedArrays}
 
 // uniforms
 ${shaderData.uniforms}

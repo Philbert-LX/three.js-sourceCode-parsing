@@ -1,15 +1,22 @@
 import TempNode from '../core/TempNode.js';
-import { uv } from '../accessors/UVNode.js';
-import { addNodeElement, Fn, nodeObject, float, vec2, vec4, int, If } from '../shadernode/ShaderNode.js';
+import { uv } from '../accessors/UV.js';
+import { Fn, nodeObject, float, vec2, vec4, int, If } from '../tsl/TSLBase.js';
 import { NodeUpdateType } from '../core/constants.js';
 import { uniform } from '../core/UniformNode.js';
 import { abs, max, min, mix, pow } from '../math/MathNode.js';
 import { sub } from '../math/OperatorNode.js';
 import { Loop, Break } from '../utils/LoopNode.js';
+import { convertToTexture } from '../utils/RTTNode.js';
 
 import { Vector2 } from '../../math/Vector2.js';
 
 class FXAANode extends TempNode {
+
+	static get type() {
+
+		return 'FXAANode';
+
+	}
 
 	constructor( textureNode ) {
 
@@ -320,8 +327,6 @@ class FXAANode extends TempNode {
 
 }
 
-export const fxaa = ( node ) => nodeObject( new FXAANode( nodeObject( node ).toTexture() ) );
-
-addNodeElement( 'fxaa', fxaa );
-
 export default FXAANode;
+
+export const fxaa = ( node ) => nodeObject( new FXAANode( convertToTexture( node ) ) );

@@ -3,11 +3,10 @@ import NodeAttribute from './NodeAttribute.js';
 import NodeVarying from './NodeVarying.js';
 import NodeVar from './NodeVar.js';
 import NodeCode from './NodeCode.js';
-import NodeKeywords from './NodeKeywords.js';
 import NodeCache from './NodeCache.js';
 import ParameterNode from './ParameterNode.js';
 import FunctionNode from '../code/FunctionNode.js';
-import { createNodeMaterialFromType, default as NodeMaterial } from '../materials/NodeMaterial.js';
+import NodeMaterial from '../../materials/nodes/NodeMaterial.js';
 import { NodeUpdateType, defaultBuildStages, shaderStages } from './constants.js';
 
 import {
@@ -16,7 +15,7 @@ import {
 } from '../../renderers/common/nodes/NodeUniform.js';
 
 import { stack } from './StackNode.js';
-import { getCurrentStack, setCurrentStack } from '../shadernode/ShaderNode.js';
+import { getCurrentStack, setCurrentStack } from '../tsl/TSLBase.js';
 
 import CubeRenderTarget from '../../renderers/common/CubeRenderTarget.js';
 import ChainMap from '../../renderers/common/ChainMap.js';
@@ -113,7 +112,6 @@ class NodeBuilder {
 		this.currentFunctionNode = null;
 
 		this.context = {
-			keywords: new NodeKeywords(),
 			material: this.material
 		};
 
@@ -199,7 +197,7 @@ class NodeBuilder {
 
 			if ( bindGroup === undefined ) {
 
-				bindGroup = new BindGroup( groupName, bindingsArray, this.bindingsIndexes[ groupName ].group );
+				bindGroup = new BindGroup( groupName, bindingsArray, this.bindingsIndexes[ groupName ].group, bindingsArray );
 
 				bindGroupsCache.set( bindingsArray, bindGroup );
 
@@ -207,7 +205,7 @@ class NodeBuilder {
 
 		} else {
 
-			bindGroup = new BindGroup( groupName, bindingsArray, this.bindingsIndexes[ groupName ].group );
+			bindGroup = new BindGroup( groupName, bindingsArray, this.bindingsIndexes[ groupName ].group, bindingsArray );
 
 		}
 
@@ -276,6 +274,23 @@ class NodeBuilder {
 		}
 
 		return bindingsGroups;
+
+	}
+
+	sortBindingGroups() {
+
+		const bindingsGroups = this.getBindings();
+
+		bindingsGroups.sort( ( a, b ) => ( a.bindings[ 0 ].groupNode.order - b.bindings[ 0 ].groupNode.order ) );
+
+		for ( let i = 0; i < bindingsGroups.length; i ++ ) {
+
+			const bindingGroup = bindingsGroups[ i ];
+			this.bindingsIndexes[ bindingGroup.name ].group = i;
+
+			bindingGroup.index = i;
+
+		}
 
 	}
 
@@ -402,7 +417,6 @@ class NodeBuilder {
 
 		const context = { ...this.context };
 
-		delete context.keywords;
 		delete context.material;
 
 		return this.context;
@@ -469,6 +483,15 @@ class NodeBuilder {
 	isFlipY() {
 
 		return false;
+
+	}
+
+	increaseUsage( node ) {
+
+		const nodeData = this.getDataFromNode( node );
+		nodeData.usageCount = nodeData.usageCount === undefined ? 1 : nodeData.usageCount + 1;
+
+		return nodeData.usageCount;
 
 	}
 
@@ -599,7 +622,7 @@ class NodeBuilder {
 
 	}
 
-	needsColorSpaceToLinear( /*texture*/ ) {
+	needsToWorkingColorSpace( /*texture*/ ) {
 
 		return false;
 
@@ -998,27 +1021,24 @@ class NodeBuilder {
 
 		const layout = shaderNode.layout;
 
-		let inputs;
+		const inputs = {
+			[ Symbol.iterator ]() {
 
-		if ( shaderNode.isArrayInput ) {
-
-			inputs = [];
-
-			for ( const input of layout.inputs ) {
-
-				inputs.push( new ParameterNode( input.type, input.name ) );
-
-			}
-
-		} else {
-
-			inputs = {};
-
-			for ( const input of layout.inputs ) {
-
-				inputs[ input.name ] = new ParameterNode( input.type, input.name );
+				let index = 0;
+				const values = Object.values( this );
+				return {
+					next: () => ( {
+						value: values[ index ],
+						done: index ++ >= values.length
+					} )
+				};
 
 			}
+		};
+
+		for ( const input of layout.inputs ) {
+
+			inputs[ input.name ] = new ParameterNode( input.type, input.name );
 
 		}
 
@@ -1227,12 +1247,21 @@ class NodeBuilder {
 
 	build() {
 
-		const { object, material } = this;
-
+		const { object, material, renderer } = this;
 
 		if ( material !== null ) {
 
-			NodeMaterial.fromMaterial( material ).build( this );
+			let nodeMaterial = renderer.nodes.library.fromMaterial( material );
+
+			if ( nodeMaterial === null ) {
+
+				console.error( `NodeMaterial: Material "${ material.type }" is not compatible.` );
+
+				nodeMaterial = new NodeMaterial();
+
+			}
+
+			nodeMaterial.build( this );
 
 		} else {
 
@@ -1304,11 +1333,9 @@ class NodeBuilder {
 
 	}
 
-	createNodeMaterial( type = 'NodeMaterial' ) {
+	createNodeMaterial( type = 'NodeMaterial' ) { // @deprecated, r168
 
-		// TODO: Move Materials.js to outside of the Nodes.js in order to remove this function and improve tree-shaking support
-
-		return createNodeMaterialFromType( type );
+		throw new Error( `THREE.NodeBuilder: createNodeMaterial() was deprecated. Use new ${ type }() instead.` );
 
 	}
 

@@ -1,16 +1,21 @@
 import UniformNode, { uniform } from '../core/UniformNode.js';
-import { uv } from './UVNode.js';
+import { uv } from './UV.js';
 import { textureSize } from './TextureSizeNode.js';
-import { colorSpaceToLinear } from '../display/ColorSpaceNode.js';
+import { toWorkingColorSpace } from '../display/ColorSpaceNode.js';
 import { expression } from '../code/ExpressionNode.js';
-import { addNodeClass } from '../core/Node.js';
 import { maxMipLevel } from '../utils/MaxMipLevelNode.js';
-import { addNodeElement, nodeProxy, vec3, nodeObject } from '../shadernode/ShaderNode.js';
+import { nodeProxy, vec3, nodeObject } from '../tsl/TSLBase.js';
 import { NodeUpdateType } from '../core/constants.js';
 
 import { IntType, UnsignedIntType } from '../../constants.js';
 
 class TextureNode extends UniformNode {
+
+	static get type() {
+
+		return 'TextureNode';
+
+	}
 
 	constructor( value, uvNode = null, levelNode = null, biasNode = null ) {
 
@@ -105,7 +110,6 @@ class TextureNode extends UniformNode {
 		if ( this._matrixUniform === null ) this._matrixUniform = uniform( this.value.matrix );
 
 		return this._matrixUniform.mul( vec3( uvNode, 1 ) ).xy;
-
 
 	}
 
@@ -275,9 +279,9 @@ class TextureNode extends UniformNode {
 			let snippet = propertyName;
 			const nodeType = this.getNodeType( builder );
 
-			if ( builder.needsColorSpaceToLinear( texture ) ) {
+			if ( builder.needsToWorkingColorSpace( texture ) ) {
 
-				snippet = colorSpaceToLinear( expression( snippet, nodeType ), texture.colorSpace ).setup( builder ).build( builder, nodeType );
+				snippet = toWorkingColorSpace( expression( snippet, nodeType ), texture.colorSpace ).setup( builder ).build( builder, nodeType );
 
 			}
 
@@ -431,14 +435,9 @@ class TextureNode extends UniformNode {
 
 export default TextureNode;
 
-export const texture = nodeProxy( TextureNode );
+export const texture = /*@__PURE__*/ nodeProxy( TextureNode );
 export const textureLoad = ( ...params ) => texture( ...params ).setSampler( false );
 
 //export const textureLevel = ( value, uv, level ) => texture( value, uv ).level( level );
 
 export const sampler = ( aTexture ) => ( aTexture.isNode === true ? aTexture : texture( aTexture ) ).convert( 'sampler' );
-
-addNodeElement( 'texture', texture );
-//addNodeElement( 'textureLevel', textureLevel );
-
-addNodeClass( 'TextureNode', TextureNode );

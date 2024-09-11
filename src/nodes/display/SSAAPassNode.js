@@ -1,4 +1,4 @@
-import { nodeObject } from '../shadernode/ShaderNode.js';
+import { nodeObject } from '../tsl/TSLBase.js';
 import PassNode from './PassNode.js';
 import { Color } from '../../math/Color.js';
 import { Vector2 } from '../../math/Vector2.js';
@@ -7,6 +7,7 @@ import { uniform } from '../core/UniformNode.js';
 import QuadMesh from '../../renderers/common/QuadMesh.js';
 import { texture } from '../accessors/TextureNode.js';
 import { mrt, getTextureIndex } from '../core/MRTNode.js';
+import NodeMaterial from '../../materials/nodes/NodeMaterial.js';
 
 const _size = /*@__PURE__*/ new Vector2();
 
@@ -21,6 +22,12 @@ const _size = /*@__PURE__*/ new Vector2();
 */
 
 class SSAAPassNode extends PassNode {
+
+	static get type() {
+
+		return 'SSAAPassNode';
+
+	}
 
 	constructor( scene, camera ) {
 
@@ -210,7 +217,7 @@ class SSAAPassNode extends PassNode {
 
 		}
 
-		this._quadMesh.material = builder.createNodeMaterial();
+		this._quadMesh.material = new NodeMaterial();
 		this._quadMesh.material.fragmentNode = sampleTexture;
 		this._quadMesh.material.transparent = true;
 		this._quadMesh.material.depthTest = false;
@@ -218,6 +225,7 @@ class SSAAPassNode extends PassNode {
 		this._quadMesh.material.premultipliedAlpha = true;
 		this._quadMesh.material.blending = AdditiveBlending;
 		this._quadMesh.material.normals = false;
+		this._quadMesh.material.name = 'SSAA';
 
 		return super.setup( builder );
 
@@ -236,6 +244,8 @@ class SSAAPassNode extends PassNode {
 	}
 
 }
+
+export default SSAAPassNode;
 
 // These jitter vectors are specified in integers because it is easier.
 // I am assuming a [-8,8) integer grid, but it needs to be mapped onto [-0.5,0.5)
@@ -275,5 +285,3 @@ const _JitterVectors = [
 ];
 
 export const ssaaPass = ( scene, camera ) => nodeObject( new SSAAPassNode( scene, camera ) );
-
-export default SSAAPassNode;
