@@ -55,8 +55,7 @@ class GLSLNodeBuilder extends NodeBuilder {
 		this.uniformGroups = {};
 		this.transforms = [];
 		this.extensions = {};
-
-		this.instanceBindGroups = false;
+		this.builtins = { vertex: [], fragment: [], compute: [] };
 
 		this.useComparisonMethod = true;
 
@@ -234,7 +233,7 @@ ${ flowData.code }
 
 				this.getVarFromNode( node, propertySizeName, 'uint' );
 
-				this.addLineFlowCode( `${ propertySizeName } = uint( textureSize( ${ textureName }, 0 ).x )` );
+				this.addLineFlowCode( `${ propertySizeName } = uint( textureSize( ${ textureName }, 0 ).x )`, storageArrayElementNode );
 
 				bufferNodeData.propertySizeName = propertySizeName;
 
@@ -264,7 +263,7 @@ ${ flowData.code }
 
 			}
 
-			this.addLineFlowCode( `${ propertyName } = ${prefix}(${ snippet })${channel}` );
+			this.addLineFlowCode( `${ propertyName } = ${prefix}(${ snippet })${channel}`, storageArrayElementNode );
 
 			elementNodeData.propertyName = propertyName;
 
@@ -597,6 +596,12 @@ ${ flowData.code }
 
 		}
 
+		for ( const builtin of this.builtins[ shaderStage ] ) {
+
+			snippet += `${builtin};\n`;
+
+		}
+
 		return snippet;
 
 	}
@@ -703,24 +708,42 @@ ${ flowData.code }
 
 	}
 
+	getClipDistance() {
+
+		return 'gl_ClipDistance';
+
+	}
+
 	isAvailable( name ) {
 
 		let result = supports[ name ];
 
 		if ( result === undefined ) {
 
-			if ( name === 'float32Filterable' ) {
+			let extensionName;
+
+			result = false;
+
+			switch ( name ) {
+
+				case 'float32Filterable':
+					extensionName = 'OES_texture_float_linear';
+					break;
+
+				case 'clipDistance':
+					extensionName = 'WEBGL_clip_cull_distance';
+					break;
+
+			}
+
+			if ( extensionName !== undefined ) {
 
 				const extensions = this.renderer.backend.extensions;
 
-				if ( extensions.has( 'OES_texture_float_linear' ) ) {
+				if ( extensions.has( extensionName ) ) {
 
-					extensions.get( 'OES_texture_float_linear' );
+					extensions.get( extensionName );
 					result = true;
-
-				} else {
-
-					result = false;
 
 				}
 
@@ -737,6 +760,14 @@ ${ flowData.code }
 	isFlipY() {
 
 		return true;
+
+	}
+
+	enableHardwareClipping( planeCount ) {
+
+		this.enableExtension( 'GL_ANGLE_clip_cull_distance', 'require' );
+
+		this.builtins[ 'vertex' ].push( `out float gl_ClipDistance[ ${ planeCount } ]` );
 
 	}
 
@@ -853,6 +884,8 @@ void main() {
 	buildCode() {
 
 		const shadersData = this.material !== null ? { fragment: {}, vertex: {} } : { compute: {} };
+
+		this.sortBindingGroups();
 
 		for ( const shaderStage in shadersData ) {
 

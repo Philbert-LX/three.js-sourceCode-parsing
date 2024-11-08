@@ -1,4 +1,4 @@
-import ClippingContext from './ClippingContext.js';
+import { hashString } from '../../nodes/core/NodeUtils.js';
 
 let _id = 0;
 
@@ -38,7 +38,7 @@ function getKeys( obj ) {
 
 export default class RenderObject {
 
-	constructor( nodes, geometries, renderer, object, material, scene, camera, lightsNode, renderContext ) {
+	constructor( nodes, geometries, renderer, object, material, scene, camera, lightsNode, renderContext, clippingContext ) {
 
 		this._nodes = nodes;
 		this._geometries = geometries;
@@ -63,15 +63,17 @@ export default class RenderObject {
 		this.vertexBuffers = null;
 		this.drawParams = null;
 
-		this.updateClipping( renderContext.clippingContext );
+		this.bundle = null;
 
-		this.clippingContextVersion = this.clippingContext.version;
+		this.clippingContext = clippingContext;
+		this.clippingContextCacheKey = clippingContext !== null ? clippingContext.cacheKey : '';
 
 		this.initialNodesCacheKey = this.getDynamicCacheKey();
 		this.initialCacheKey = this.getCacheKey();
 
 		this._nodeBuilderState = null;
 		this._bindings = null;
+		this._monitor = null;
 
 		this.onDispose = null;
 
@@ -89,42 +91,35 @@ export default class RenderObject {
 
 	updateClipping( parent ) {
 
-		const material = this.material;
-
-		let clippingContext = this.clippingContext;
-
-		if ( Array.isArray( material.clippingPlanes ) ) {
-
-			if ( clippingContext === parent || ! clippingContext ) {
-
-				clippingContext = new ClippingContext();
-				this.clippingContext = clippingContext;
-
-			}
-
-			clippingContext.update( parent, material );
-
-		} else if ( this.clippingContext !== parent ) {
-
-			this.clippingContext = parent;
-
-		}
+		this.clippingContext = parent;
 
 	}
 
 	get clippingNeedsUpdate() {
 
-		if ( this.clippingContext.version === this.clippingContextVersion ) return false;
+		if ( this.clippingContext === null || this.clippingContext.cacheKey === this.clippingContextCacheKey ) return false;
 
-		this.clippingContextVersion = this.clippingContext.version;
+		this.clippingContextCacheKey = this.clippingContext.cacheKey;
 
 		return true;
+
+	}
+
+	get hardwareClippingPlanes() {
+
+		return this.material.hardwareClipping === true ? this.clippingContext.unionClippingCount : 0;
 
 	}
 
 	getNodeBuilderState() {
 
 		return this._nodeBuilderState || ( this._nodeBuilderState = this._nodes.getForRender( this ) );
+
+	}
+
+	getMonitor() {
+
+		return this._monitor || ( this._monitor = this.getNodeBuilderState().monitor );
 
 	}
 
@@ -140,9 +135,22 @@ export default class RenderObject {
 
 	}
 
+	getIndirect() {
+
+		return this._geometries.getIndirect( this );
+
+	}
+
 	getChainArray() {
 
 		return [ this.object, this.material, this.context, this.lightsNode ];
+
+	}
+
+	setGeometry( geometry ) {
+
+		this.geometry = geometry;
+		this.attributes = null;
 
 	}
 
@@ -223,7 +231,18 @@ export default class RenderObject {
 
 		}
 
-		const itemCount = hasIndex === true ? index.count : geometry.attributes.position.count;
+		const position = geometry.attributes.position;
+		let itemCount = Infinity;
+
+		if ( hasIndex ) {
+
+			itemCount = index.count;
+
+		} else if ( position !== undefined && position !== null ) {
+
+			itemCount = position.count;
+
+		}
 
 		firstVertex = Math.max( firstVertex, 0 );
 		lastVertex = Math.min( lastVertex, itemCount );
@@ -236,6 +255,35 @@ export default class RenderObject {
 		drawParams.firstVertex = firstVertex;
 
 		return drawParams;
+
+	}
+
+	getGeometryCacheKey() {
+
+		const { geometry } = this;
+
+		let cacheKey = '';
+
+		for ( const name of Object.keys( geometry.attributes ).sort() ) {
+
+			const attribute = geometry.attributes[ name ];
+
+			cacheKey += name + ',';
+
+			if ( attribute.data ) cacheKey += attribute.data.stride + ',';
+			if ( attribute.offset ) cacheKey += attribute.offset + ',';
+			if ( attribute.itemSize ) cacheKey += attribute.itemSize + ',';
+			if ( attribute.normalized ) cacheKey += 'n,';
+
+		}
+
+		if ( geometry.index ) {
+
+			cacheKey += 'index,';
+
+		}
+
+		return cacheKey;
 
 	}
 
@@ -291,7 +339,13 @@ export default class RenderObject {
 
 		}
 
-		cacheKey += this.clippingContext.cacheKey + ',';
+		cacheKey += this.clippingContextCacheKey + ',';
+
+		if ( object.geometry ) {
+
+			cacheKey += this.getGeometryCacheKey();
+
+		}
 
 		if ( object.skeleton ) {
 
@@ -319,17 +373,25 @@ export default class RenderObject {
 
 		if ( object.count > 1 ) {
 
-			cacheKey += object.count + ',' + object.uuid + ',';
+			// TODO: https://github.com/mrdoob/three.js/pull/29066#issuecomment-2269400850
+
+			cacheKey += object.uuid + ',';
 
 		}
 
-		return cacheKey;
+		return hashString( cacheKey );
+
+	}
+
+	get needsGeometryUpdate() {
+
+		return this.geometry.id !== this.object.geometry.id;
 
 	}
 
 	get needsUpdate() {
 
-		return this.initialNodesCacheKey !== this.getDynamicCacheKey() || this.clippingNeedsUpdate;
+		return /*this.object.static !== true &&*/ ( this.initialNodesCacheKey !== this.getDynamicCacheKey() || this.clippingNeedsUpdate );
 
 	}
 
@@ -337,13 +399,21 @@ export default class RenderObject {
 
 		// Environment Nodes Cache Key
 
-		return this.object.receiveShadow + ',' + this._nodes.getCacheKey( this.scene, this.lightsNode );
+		let cacheKey = this._nodes.getCacheKey( this.scene, this.lightsNode );
+
+		if ( this.object.receiveShadow ) {
+
+			cacheKey += 1;
+
+		}
+
+		return cacheKey;
 
 	}
 
 	getCacheKey() {
 
-		return this.getMaterialCacheKey() + ',' + this.getDynamicCacheKey();
+		return this.getMaterialCacheKey() + this.getDynamicCacheKey();
 
 	}
 
