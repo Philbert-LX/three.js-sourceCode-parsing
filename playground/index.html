@@ -92,7 +92,7 @@
 	</head>
 	<body>
 
-		<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.48.0/min/vs/loader.min.js"></script>
+		<script src="./libs/loader.min.js"></script>
 
 		<script type="importmap">
 			{
@@ -116,19 +116,23 @@
 			let camera, scene, renderer, composer;
 			let nodeEditor;
 
+			// 初始化构建
 			init();
 
 			async function init() {
 
+				// 创建一个node-editor html元素
 				const container = document.createElement( 'node-editor' );
 
 				document.body.appendChild( container );
 
 				//
 
+				// 创建一个透视相机
 				camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 0.5, 200 );
 				camera.position.set( 0.0, 3, 4 * 3 );
 
+				// 该scene是放预览效果的场景
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color( 0x333333 );
 
